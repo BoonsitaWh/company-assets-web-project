@@ -4,38 +4,131 @@
     <header class="admin-header">
       <div>
         <h1>ระบบจัดการ Admin</h1>
-        <p>จัดการทรัพย์สินและรายการยืมคืนของบริษัท</p>
+        <p>จัดการทรัพย์สิน พนักงาน และรายการยืมคืนของบริษัท</p>
       </div>
       <button class="refresh-btn" @click="loadAll" :disabled="loading">
-        {{ loading ? '⏳ กำลังโหลด...' : '🔄 รีเฟรช' }}
+        {{ loading ? 'กำลังโหลด...' : '🔄 รีเฟรช' }}
       </button>
     </header>
 
     <!-- DASHBOARD -->
     <section class="dashboard">
       <div class="stat-card">
-        <div class="stat-icon">📦</div>
-        <div><span>ทรัพย์สินทั้งหมด</span><strong>{{ stats.totalAssets }}</strong></div>
+        <span>📦 ทรัพย์สินทั้งหมด</span>
+        <strong>{{ stats.totalAssets }}</strong>
       </div>
       <div class="stat-card">
-        <div class="stat-icon">✅</div>
-        <div><span>พร้อมใช้งาน</span><strong>{{ stats.availableAssets }}</strong></div>
+        <span>✅ พร้อมใช้งาน</span>
+        <strong>{{ stats.availableAssets }}</strong>
       </div>
       <div class="stat-card">
-        <div class="stat-icon">📤</div>
-        <div><span>กำลังถูกยืม</span><strong>{{ stats.borrowedAssets }}</strong></div>
+        <span>📤 กำลังถูกยืม</span>
+        <strong>{{ stats.borrowedAssets }}</strong>
       </div>
       <div class="stat-card warning">
-        <div class="stat-icon">⏳</div>
-        <div><span>รออนุมัติยืม</span><strong>{{ stats.pendingBorrow }}</strong></div>
+        <span>⏳ รออนุมัติยืม</span>
+        <strong>{{ stats.pendingBorrow }}</strong>
       </div>
-      <div class="stat-card return-warning">
-        <div class="stat-icon">🔄</div>
-        <div><span>รออนุมัติคืน</span><strong>{{ returnRequestedCount }}</strong></div>
+      <div class="stat-card warning">
+        <span>🔄 รออนุมัติคืน</span>
+        <strong>{{ returnRequestedCount }}</strong>
       </div>
       <div class="stat-card success">
-        <div class="stat-icon">📥</div>
-        <div><span>คืนแล้ว</span><strong>{{ stats.returned }}</strong></div>
+        <span>📥 คืนแล้ว</span>
+        <strong>{{ stats.returned }}</strong>
+      </div>
+    </section>
+
+    <!-- EMPLOYEE MANAGEMENT -->
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>👥 จัดการข้อมูลพนักงาน</h2>
+          <p>แก้ไขชื่อ อีเมล เบอร์โทรศัพท์ และแผนก</p>
+        </div>
+        <button class="refresh-btn" @click="loadEmployees" :disabled="loadingEmployees">
+          {{ loadingEmployees ? 'กำลังโหลด...' : 'โหลดรายชื่อใหม่' }}
+        </button>
+      </div>
+
+      <div v-if="employeeMessage" class="message">
+        {{ employeeMessage }}
+      </div>
+
+      <div v-if="showEmployeeForm" class="edit-form">
+        <h3>✏️ แก้ไขข้อมูลพนักงาน #{{ employeeForm.EmployeeID }}</h3>
+
+        <form @submit.prevent="saveEmployee">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>ชื่อพนักงาน *</label>
+              <input v-model.trim="employeeForm.Name" maxlength="100" required />
+            </div>
+
+            <div class="form-group">
+              <label>อีเมล *</label>
+              <input v-model.trim="employeeForm.Email" type="email" maxlength="100" required />
+            </div>
+
+            <div class="form-group">
+              <label>เบอร์โทรศัพท์</label>
+              <input v-model.trim="employeeForm.Phone" maxlength="20" />
+            </div>
+
+            <div class="form-group">
+              <label>แผนก *</label>
+              <select v-model="employeeForm.DepartmentID" required>
+                <option value="">เลือกแผนก</option>
+                <option
+                  v-for="department in departments"
+                  :key="department.DepartmentID"
+                  :value="Number(department.DepartmentID)"
+                >
+                  {{ department.DepartmentName }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="primary-btn" type="submit" :disabled="savingEmployee">
+              {{ savingEmployee ? 'กำลังบันทึก...' : '💾 บันทึกข้อมูลพนักงาน' }}
+            </button>
+            <button class="cancel-btn" type="button" @click="closeEmployeeForm" :disabled="savingEmployee">
+              ยกเลิก
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>ชื่อพนักงาน</th>
+              <th>อีเมล</th>
+              <th>เบอร์โทรศัพท์</th>
+              <th>แผนก</th>
+              <th>จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="employee in employees" :key="employee.EmployeeID">
+              <td>{{ employee.EmployeeID }}</td>
+              <td>{{ employee.Name }}</td>
+              <td>{{ employee.Email }}</td>
+              <td>{{ employee.Phone || '-' }}</td>
+              <td>{{ employee.DepartmentName || '-' }}</td>
+              <td>
+                <button class="edit-btn" @click="openEmployeeForm(employee)">✏️ แก้ไข</button>
+              </td>
+            </tr>
+            <tr v-if="!loadingEmployees && employees.length === 0">
+              <td colspan="6" class="empty">ไม่พบข้อมูลพนักงาน</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
@@ -43,7 +136,7 @@
     <section class="panel">
       <div class="panel-header">
         <div>
-          <h2>จัดการทรัพย์สิน</h2>
+          <h2>📦 จัดการทรัพย์สิน</h2>
           <p>เพิ่ม แก้ไข และลบทรัพย์สินของบริษัท</p>
         </div>
         <button class="primary-btn" @click="openAssetForm()" :disabled="savingAsset">
@@ -51,79 +144,107 @@
         </button>
       </div>
 
-      <div v-if="showAssetForm" class="asset-form">
+      <div v-if="showAssetForm" class="edit-form">
         <h3>{{ editingAsset ? '✏️ แก้ไขทรัพย์สิน' : '➕ เพิ่มทรัพย์สิน' }}</h3>
 
-        <div class="form-grid">
-          <div class="form-group">
-            <label>ชื่อทรัพย์สิน *</label>
-            <input v-model="assetForm.AssetName" type="text" placeholder="เช่น Notebook Dell" />
+        <form @submit.prevent="saveAsset">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>ชื่อทรัพย์สิน *</label>
+              <input v-model.trim="assetForm.AssetName" maxlength="100" required />
+            </div>
+
+            <div class="form-group">
+              <label>Serial Number</label>
+              <input v-model.trim="assetForm.SerialNumber" maxlength="50" />
+            </div>
+
+            <div class="form-group">
+              <label>หมวดหมู่ *</label>
+              <select v-model="assetForm.CategoryID" required>
+                <option value="">เลือกหมวดหมู่</option>
+                <option
+                  v-for="category in categories"
+                  :key="category.CategoryID"
+                  :value="Number(category.CategoryID)"
+                >
+                  {{ category.CategoryName }}
+                </option>
+                <option value="__other__">➕ อื่น ๆ — ระบุหมวดหมู่ใหม่</option>
+              </select>
+            </div>
+
+            <div v-if="assetForm.CategoryID === '__other__'" class="form-group">
+              <label>ชื่อหมวดหมู่ใหม่ *</label>
+              <input
+                v-model.trim="newCategoryName"
+                maxlength="100"
+                placeholder="เช่น อุปกรณ์สำนักงาน"
+                required
+              />
+              <small>หากชื่อหมวดหมู่มีอยู่แล้ว ระบบจะใช้หมวดหมู่เดิม</small>
+            </div>
+
+            <div class="form-group full-width">
+              <label>รายละเอียด / แหล่งที่มา</label>
+              <textarea
+                v-model.trim="assetForm.Details"
+                maxlength="1000"
+                rows="4"
+                placeholder="เช่น ซื้อจากร้าน ABC, รับมาจากแผนก IT หรือรายละเอียดเพิ่มเติม"
+              ></textarea>
+              <small>ระบุรายละเอียดหรือแหล่งที่มาของทรัพย์สินได้ไม่เกิน 1,000 ตัวอักษร</small>
+            </div>
+
+            <div class="form-group">
+              <label>สถานะ</label>
+              <select v-model="assetForm.Status">
+                <option value="Available">Available - พร้อมใช้งาน</option>
+                <option value="Borrowed">Borrowed - กำลังถูกยืม</option>
+                <option value="Broken">Broken - ชำรุด</option>
+              </select>
+              <small>ตัวเลือกสถานะต้องตรงกับ enum ในฐานข้อมูล</small>
+            </div>
+
+            <div class="form-group">
+              <label>จำนวนทั้งหมด *</label>
+              <input v-model.number="assetForm.TotalQuantity" type="number" min="1" step="1" required />
+            </div>
+
+            <div class="form-group">
+              <label>รูปภาพ</label>
+              <input
+                ref="imageInput"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                @change="handleImageChange"
+              />
+              <small>รองรับ JPG, PNG, WEBP, GIF ขนาดไม่เกิน 5 MB</small>
+            </div>
+
+            <div v-if="imagePreview" class="form-group">
+              <label>ตัวอย่างรูปภาพ</label>
+              <img :src="imagePreview" class="image-preview" alt="ตัวอย่างรูปทรัพย์สิน" />
+              <button type="button" class="cancel-btn" @click="clearSelectedImage">
+                ล้างรูปที่เลือก
+              </button>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label>Serial Number</label>
-            <input v-model="assetForm.SerialNumber" type="text" placeholder="กรอก Serial Number ถ้ามี" />
-            <small>ถ้าเป็นทรัพย์สินหลายชิ้นชนิดเดียวกัน สามารถเว้นว่างได้</small>
-          </div>
-
-          <div class="form-group">
-            <label>หมวดหมู่ *</label>
-            <select v-model="assetForm.CategoryID">
-              <option value="">เลือกหมวดหมู่</option>
-              <option v-for="category in categories" :key="category.CategoryID" :value="category.CategoryID">
-                {{ category.CategoryName }}
-              </option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label>สถานะ</label>
-            <select v-model="assetForm.Status">
-              <option value="Available">Available - พร้อมใช้งาน</option>
-              <option value="Borrowed">Borrowed - กำลังถูกยืม</option>
-              <option value="Maintenance">Maintenance - ซ่อมบำรุง</option>
-            </select>
-            <small>ระบบยืมคืนอาจคำนวณสถานะใหม่ตามจำนวนคงเหลือ</small>
-          </div>
-
-          <div class="form-group">
-            <label>จำนวนทรัพย์สินทั้งหมด *</label>
-            <input v-model.number="assetForm.TotalQuantity" type="number" min="1" step="1" placeholder="เช่น 10" />
-            <small>ตัวอย่าง Notebook 10 เครื่อง ให้กรอก 10</small>
-          </div>
-
-          <div class="form-group">
-            <label>รูปภาพทรัพย์สิน</label>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              @change="handleImageChange"
-            />
-            <small>รองรับ JPG, PNG, WEBP, GIF ขนาดไม่เกิน 5 MB</small>
-          </div>
-
-          <div v-if="imagePreview" class="form-group image-preview-group">
-            <label>ตัวอย่างรูปภาพ</label>
-            <img :src="imagePreview" alt="ตัวอย่างรูปทรัพย์สิน" class="image-preview" />
-            <button type="button" class="cancel-btn" @click="clearSelectedImage">
-              ล้างรูปที่เลือก
+          <div class="form-actions">
+            <button class="primary-btn" type="submit" :disabled="savingAsset">
+              {{ savingAsset ? 'กำลังบันทึก...' : '💾 บันทึกทรัพย์สิน' }}
+            </button>
+            <button class="cancel-btn" type="button" @click="closeAssetForm" :disabled="savingAsset">
+              ยกเลิก
             </button>
           </div>
-        </div>
-
-        <div class="form-actions">
-          <button class="primary-btn" @click="saveAsset" :disabled="savingAsset">
-            {{ savingAsset ? '⏳ กำลังบันทึก...' : '💾 บันทึก' }}
-          </button>
-          <button class="cancel-btn" @click="closeAssetForm" :disabled="savingAsset">
-            ยกเลิก
-          </button>
-        </div>
+        </form>
       </div>
 
       <!-- ASSET TABLE -->
       <div class="table-wrapper">
-        <table>
+        <table class="asset-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -131,7 +252,8 @@
               <th>ชื่อทรัพย์สิน</th>
               <th>Serial Number</th>
               <th>หมวดหมู่</th>
-              <th>จำนวนทั้งหมด</th>
+              <th>รายละเอียด / แหล่งที่มา</th>
+              <th>ทั้งหมด</th>
               <th>กำลังยืม</th>
               <th>คงเหลือ</th>
               <th>สถานะ</th>
@@ -145,35 +267,32 @@
                 <img
                   v-if="asset.ImagePath"
                   :src="assetImageUrl(asset.ImagePath)"
-                  :alt="asset.AssetName"
                   class="asset-thumbnail"
+                  :alt="asset.AssetName"
                 />
-                <span v-else class="no-image">ไม่มีรูป</span>
+                <span v-else>-</span>
               </td>
-              <td><strong>{{ asset.AssetName }}</strong></td>
+              <td>{{ asset.AssetName }}</td>
               <td>{{ asset.SerialNumber || '-' }}</td>
               <td>{{ asset.CategoryName || asset.CategoryID || '-' }}</td>
+              <td class="details-cell">{{ asset.Details || '-' }}</td>
               <td>{{ asset.TotalQuantity ?? 1 }}</td>
               <td>{{ asset.BorrowedQuantity ?? 0 }}</td>
               <td>{{ asset.AvailableQuantity ?? asset.TotalQuantity ?? 1 }}</td>
+              <td>{{ assetStatusText(asset.Status) }}</td>
               <td>
-                <span class="status" :class="asset.Status">
-                  {{ assetStatusText(asset.Status) }}
-                </span>
-              </td>
-              <td>
-                <div class="action-buttons">
-                  <button class="edit-btn" @click="openAssetForm(asset)" :disabled="savingAsset">
-                    ✏️ แก้ไข
-                  </button>
-                  <button class="delete-btn" @click="deleteAsset(asset.AssetID)" :disabled="deletingAssetIds.includes(asset.AssetID)">
-                    {{ deletingAssetIds.includes(asset.AssetID) ? 'กำลังลบ...' : '🗑️ ลบ' }}
-                  </button>
-                </div>
+                <button class="edit-btn" @click="openAssetForm(asset)">แก้ไข</button>
+                <button
+                  class="delete-btn"
+                  @click="deleteAsset(asset.AssetID)"
+                  :disabled="isDeleting(asset.AssetID)"
+                >
+                  {{ isDeleting(asset.AssetID) ? 'กำลังลบ...' : 'ลบ' }}
+                </button>
               </td>
             </tr>
-            <tr v-if="assets.length === 0">
-              <td colspan="10" class="empty">ไม่พบข้อมูลทรัพย์สิน</td>
+            <tr v-if="!loading && assets.length === 0">
+              <td colspan="11" class="empty">ไม่พบข้อมูลทรัพย์สิน</td>
             </tr>
           </tbody>
         </table>
@@ -184,15 +303,9 @@
     <section class="panel">
       <div class="panel-header">
         <div>
-          <h2>รายการยืม - คืนทรัพย์สิน</h2>
-          <p>ตรวจสอบข้อมูลพนักงาน คำขอยืม และหลักฐานการคืน</p>
+          <h2>🔄 รายการยืม - คืนทรัพย์สิน</h2>
+          <p>ตรวจสอบคำขอยืมและหลักฐานการคืน</p>
         </div>
-      </div>
-
-      <div v-if="returnRequestedCount > 0" class="return-alert">
-        🔔 มีคำขอคืนทรัพย์สิน
-        <strong>{{ returnRequestedCount }}</strong>
-        รายการ รอการอนุมัติจาก Admin
       </div>
 
       <div class="table-wrapper">
@@ -200,21 +313,20 @@
           <thead>
             <tr>
               <th>ID</th>
-              <th>ชื่อพนักงาน</th>
+              <th>พนักงาน</th>
               <th>แผนก</th>
-              <th>เบอร์โทรศัพท์</th>
+              <th>เบอร์โทร</th>
               <th>อีเมล</th>
               <th>ทรัพย์สิน</th>
-              <th>Serial Number</th>
+              <th>Serial</th>
               <th>วันที่ยืม</th>
               <th>กำหนดคืน</th>
               <th>วันที่คืน</th>
-              <th>หลักฐานการคืน</th>
+              <th>หลักฐานคืน</th>
               <th>สถานะ</th>
               <th>จัดการ</th>
             </tr>
           </thead>
-
           <tbody>
             <tr v-for="item in borrows" :key="item.TransactionID">
               <td>{{ item.TransactionID }}</td>
@@ -227,80 +339,41 @@
               <td>{{ formatDate(item.BorrowDate) }}</td>
               <td>{{ formatDate(item.DueDate) }}</td>
               <td>{{ formatDate(item.ReturnDate) }}</td>
-
               <td>
                 <a
                   v-if="item.ReturnProofPath"
                   :href="assetImageUrl(item.ReturnProofPath)"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="proof-link"
-                >
-                  <img
-                    :src="assetImageUrl(item.ReturnProofPath)"
-                    alt="หลักฐานการคืน"
-                    class="proof-thumbnail"
-                  />
-                  <span>🔍 ดูหลักฐาน</span>
-                </a>
-                <span v-else class="no-image">ยังไม่มีหลักฐาน</span>
+                >ดูหลักฐาน</a>
+                <span v-else>-</span>
               </td>
-
+              <td>{{ borrowStatusText(item.Status) }}</td>
               <td>
-                <span class="status" :class="item.Status">
-                  {{ borrowStatusText(item.Status) }}
-                </span>
-              </td>
+                <template v-if="item.Status === 'PendingApproval'">
+                  <button
+                    class="primary-btn"
+                    :disabled="processingBorrowIds.includes(item.TransactionID)"
+                    @click="approveBorrow(item.TransactionID)"
+                  >อนุมัติ</button>
+                  <button
+                    class="delete-btn"
+                    :disabled="processingBorrowIds.includes(item.TransactionID)"
+                    @click="rejectBorrow(item.TransactionID)"
+                  >ปฏิเสธ</button>
+                </template>
 
-              <td>
-                <div class="borrow-actions">
-                  <template v-if="item.Status === 'PendingApproval'">
-                    <button
-                      class="approve-btn"
-                      @click="approveBorrow(item.TransactionID)"
-                      :disabled="processingBorrowIds.includes(item.TransactionID)"
-                    >
-                      {{ processingBorrowIds.includes(item.TransactionID) ? 'กำลังดำเนินการ...' : '✅ อนุมัติยืม' }}
-                    </button>
-                    <button
-                      class="reject-btn"
-                      @click="rejectBorrow(item.TransactionID)"
-                      :disabled="processingBorrowIds.includes(item.TransactionID)"
-                    >
-                      ❌ ปฏิเสธ
-                    </button>
-                  </template>
+                <button
+                  v-else-if="item.Status === 'ReturnRequested'"
+                  class="primary-btn"
+                  :disabled="processingReturnIds.includes(item.TransactionID)"
+                  @click="approveReturn(item)"
+                >อนุมัติคืน</button>
 
-                  <template v-else-if="item.Status === 'Borrowed'">
-                    <span class="waiting-text">⏳ รอผู้ยืมกดขอคืน</span>
-                  </template>
-
-                  <template v-else-if="item.Status === 'ReturnRequested'">
-                    <button
-                      class="approve-return-btn"
-                      @click="approveReturn(item)"
-                      :disabled="processingReturnIds.includes(item.TransactionID)"
-                    >
-                      {{ processingReturnIds.includes(item.TransactionID) ? '⏳ กำลังอนุมัติ...' : '✅ อนุมัติการคืนสำเร็จ' }}
-                    </button>
-                  </template>
-
-                  <template v-else-if="item.Status === 'Returned'">
-                    <span class="returned-text">✅ คืนเรียบร้อยแล้ว</span>
-                  </template>
-
-                  <template v-else-if="item.Status === 'Rejected'">
-                    <span class="rejected-text">❌ รายการถูกปฏิเสธ</span>
-                  </template>
-
-                  <template v-else>
-                    <span>-</span>
-                  </template>
-                </div>
+                <span v-else>{{ borrowStatusText(item.Status) }}</span>
               </td>
             </tr>
-
-            <tr v-if="borrows.length === 0">
+            <tr v-if="!loading && borrows.length === 0">
               <td colspan="13" class="empty">ไม่พบรายการยืมคืน</td>
             </tr>
           </tbody>
@@ -317,12 +390,27 @@ import api from '../api'
 const assets = ref([])
 const categories = ref([])
 const borrows = ref([])
+const employees = ref([])
+const departments = ref([])
 
 const loading = ref(false)
+const loadingEmployees = ref(false)
+const savingEmployee = ref(false)
 const savingAsset = ref(false)
+const showEmployeeForm = ref(false)
+const showAssetForm = ref(false)
+const employeeMessage = ref('')
+const editingAsset = ref(null)
+const selectedImage = ref(null)
+const imagePreview = ref('')
+const imageInput = ref(null)
+const newCategoryName = ref('')
+
 const processingBorrowIds = ref([])
 const processingReturnIds = ref([])
 const deletingAssetIds = ref([])
+
+let previewObjectUrl = null
 
 const stats = ref({
   totalAssets: 0,
@@ -332,16 +420,19 @@ const stats = ref({
   returned: 0
 })
 
-const showAssetForm = ref(false)
-const editingAsset = ref(null)
-const selectedImage = ref(null)
-const imagePreview = ref('')
-let previewObjectUrl = null
+const employeeForm = ref({
+  EmployeeID: null,
+  Name: '',
+  Email: '',
+  Phone: '',
+  DepartmentID: ''
+})
 
 const assetForm = ref({
   AssetName: '',
   SerialNumber: '',
   CategoryID: '',
+  Details: '',
   Status: 'Available',
   TotalQuantity: 1
 })
@@ -350,16 +441,21 @@ const returnRequestedCount = computed(() =>
   borrows.value.filter(item => item.Status === 'ReturnRequested').length
 )
 
+function isDeleting(id) {
+  return deletingAssetIds.value.some(item => String(item) === String(id))
+}
+
 async function loadAll() {
   if (loading.value) return
-
   loading.value = true
+
   try {
     await Promise.all([
       loadStats(),
       loadAssets(),
       loadCategories(),
-      loadBorrows()
+      loadBorrows(),
+      loadEmployees()
     ])
   } finally {
     loading.value = false
@@ -372,7 +468,7 @@ async function loadStats() {
     const data = response.data?.data ?? response.data ?? {}
 
     stats.value = {
-      totalAssets: data.totalAssets ?? data.total ?? 0,
+      totalAssets: data.totalAssets ?? data.assets ?? data.total ?? 0,
       availableAssets: data.availableAssets ?? data.available ?? 0,
       borrowedAssets: data.borrowedAssets ?? data.borrowed ?? 0,
       pendingBorrow: data.pendingBorrow ?? data.pending ?? 0,
@@ -416,6 +512,93 @@ async function loadBorrows() {
   }
 }
 
+async function loadEmployees() {
+  if (loadingEmployees.value) return
+  loadingEmployees.value = true
+
+  try {
+    const [employeeResponse, departmentResponse] = await Promise.all([
+      api.get('/admin/employees'),
+      api.get('/assets/departments')
+    ])
+
+    const employeeData = employeeResponse.data?.data ?? employeeResponse.data
+    const departmentData = departmentResponse.data?.data ?? departmentResponse.data
+
+    employees.value = Array.isArray(employeeData) ? employeeData : []
+    departments.value = Array.isArray(departmentData) ? departmentData : []
+    employeeMessage.value = ''
+  } catch (error) {
+    console.error('Load employees error:', error)
+    employeeMessage.value =
+      error.response?.data?.message || 'โหลดข้อมูลพนักงานไม่สำเร็จ'
+  } finally {
+    loadingEmployees.value = false
+  }
+}
+
+function openEmployeeForm(employee) {
+  employeeMessage.value = ''
+  employeeForm.value = {
+    EmployeeID: employee.EmployeeID,
+    Name: employee.Name || '',
+    Email: employee.Email || '',
+    Phone: employee.Phone || '',
+    DepartmentID: Number(employee.DepartmentID)
+  }
+  showEmployeeForm.value = true
+}
+
+function closeEmployeeForm() {
+  if (savingEmployee.value) return
+
+  showEmployeeForm.value = false
+  employeeForm.value = {
+    EmployeeID: null,
+    Name: '',
+    Email: '',
+    Phone: '',
+    DepartmentID: ''
+  }
+}
+
+async function saveEmployee() {
+  if (savingEmployee.value) return
+
+  const id = employeeForm.value.EmployeeID
+  const name = employeeForm.value.Name.trim()
+  const email = employeeForm.value.Email.trim()
+  const phone = employeeForm.value.Phone.trim()
+  const departmentId = Number(employeeForm.value.DepartmentID)
+
+  if (!name || !email || !Number.isInteger(departmentId) || departmentId < 1) {
+    employeeMessage.value = 'กรุณากรอกข้อมูลที่จำเป็นให้ครบ'
+    return
+  }
+
+  savingEmployee.value = true
+  employeeMessage.value = ''
+
+  try {
+    await api.put(`/admin/employees/${id}`, {
+      Name: name,
+      Email: email,
+      Phone: phone || null,
+      DepartmentID: departmentId
+    })
+
+    showEmployeeForm.value = false
+    employeeMessage.value = 'บันทึกข้อมูลพนักงานสำเร็จ'
+    await loadEmployees()
+  } catch (error) {
+    console.error('Save employee error:', error)
+    employeeMessage.value =
+      error.response?.data?.message || 'บันทึกข้อมูลพนักงานไม่สำเร็จ'
+  } finally {
+    savingEmployee.value = false
+  }
+}
+
 function releasePreviewUrl() {
   if (previewObjectUrl) {
     URL.revokeObjectURL(previewObjectUrl)
@@ -426,31 +609,32 @@ function releasePreviewUrl() {
 function openAssetForm(asset = null) {
   editingAsset.value = asset
   selectedImage.value = null
+  newCategoryName.value = ''
   releasePreviewUrl()
 
-  if (asset) {
-    assetForm.value = {
-      AssetName: asset.AssetName || '',
-      SerialNumber: asset.SerialNumber || '',
-      CategoryID: asset.CategoryID ?? '',
-      Status: asset.Status || 'Available',
-      TotalQuantity: Number(asset.TotalQuantity ?? 1)
-    }
+  assetForm.value = asset
+    ? {
+        AssetName: asset.AssetName || '',
+        SerialNumber: asset.SerialNumber || '',
+        CategoryID: Number(asset.CategoryID) || '',
+        Details: asset.Details || '',
+        Status: asset.Status || 'Available',
+        TotalQuantity: Number(asset.TotalQuantity ?? 1)
+      }
+    : {
+        AssetName: '',
+        SerialNumber: '',
+        CategoryID: '',
+        Details: '',
+        Status: 'Available',
+        TotalQuantity: 1
+      }
 
-    imagePreview.value = asset.ImagePath
-      ? assetImageUrl(asset.ImagePath)
-      : ''
-  } else {
-    assetForm.value = {
-      AssetName: '',
-      SerialNumber: '',
-      CategoryID: '',
-      Status: 'Available',
-      TotalQuantity: 1
-    }
-    imagePreview.value = ''
-  }
+  imagePreview.value = asset?.ImagePath
+    ? assetImageUrl(asset.ImagePath)
+    : ''
 
+  if (imageInput.value) imageInput.value.value = ''
   showAssetForm.value = true
 }
 
@@ -458,15 +642,10 @@ function handleImageChange(event) {
   const file = event.target.files?.[0]
   if (!file) return
 
-  const allowedTypes = [
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/gif'
-  ]
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
-  if (!allowedTypes.includes(file.type)) {
-    alert('กรุณาเลือกไฟล์ JPG, PNG, WEBP หรือ GIF')
+  if (!allowed.includes(file.type)) {
+    alert('รองรับเฉพาะ JPG, PNG, WEBP และ GIF')
     event.target.value = ''
     return
   }
@@ -491,15 +670,19 @@ function clearSelectedImage() {
     ? assetImageUrl(editingAsset.value.ImagePath)
     : ''
 
-  const fileInput = document.querySelector('.asset-form input[type="file"]')
-  if (fileInput) fileInput.value = ''
+  if (imageInput.value) imageInput.value.value = ''
 }
 
 function assetImageUrl(imagePath) {
   if (!imagePath) return ''
   if (/^https?:\/\//i.test(imagePath)) return imagePath
 
-  return `http://localhost:3000${imagePath.startsWith('/') ? '' : '/'}${imagePath}`
+  const baseURL = String(
+    api.defaults?.baseURL || 'http://localhost:3000/api'
+  ).replace(/\/+$/, '')
+
+  const serverURL = baseURL.replace(/\/api$/, '')
+  return `${serverURL}/${String(imagePath).replace(/^\/+/, '')}`
 }
 
 function closeAssetForm() {
@@ -508,36 +691,109 @@ function closeAssetForm() {
   showAssetForm.value = false
   editingAsset.value = null
   selectedImage.value = null
+  newCategoryName.value = ''
   imagePreview.value = ''
   releasePreviewUrl()
+
+  if (imageInput.value) imageInput.value.value = ''
+}
+
+async function getCategoryIdForSaving() {
+  if (assetForm.value.CategoryID !== '__other__') {
+    const categoryId = Number(assetForm.value.CategoryID)
+
+    if (!Number.isInteger(categoryId) || categoryId < 1) {
+      throw new Error('กรุณาเลือกหมวดหมู่')
+    }
+
+    return categoryId
+  }
+
+  const name = newCategoryName.value.trim()
+
+  if (!name) throw new Error('กรุณาระบุชื่อหมวดหมู่ใหม่')
+  if (name.length > 100) throw new Error('ชื่อหมวดหมู่ต้องไม่เกิน 100 ตัวอักษร')
+
+  const existing = categories.value.find(
+    category =>
+      String(category.CategoryName).trim().toLowerCase() === name.toLowerCase()
+  )
+
+  if (existing) return Number(existing.CategoryID)
+
+  const response = await api.post('/assets/categories', {
+    categoryName: name
+  })
+
+  const result = response.data?.data ?? response.data
+  let categoryId =
+    result?.CategoryID ??
+    result?.categoryId ??
+    result?.insertId
+
+  if (!categoryId) {
+    await loadCategories()
+
+    const created = categories.value.find(
+      category =>
+        String(category.CategoryName).trim().toLowerCase() === name.toLowerCase()
+    )
+
+    categoryId = created?.CategoryID
+  }
+
+  if (!categoryId) {
+    throw new Error('เพิ่มหมวดหมู่แล้ว แต่ไม่พบรหัสหมวดหมู่ กรุณาโหลดหมวดหมู่ใหม่')
+  }
+
+  await loadCategories()
+  return Number(categoryId)
 }
 
 async function saveAsset() {
   if (savingAsset.value) return
 
-  if (!assetForm.value.AssetName.trim()) {
+  const name = assetForm.value.AssetName.trim()
+  const quantity = Number(assetForm.value.TotalQuantity)
+
+  if (!name) {
     alert('กรุณากรอกชื่อทรัพย์สิน')
     return
   }
 
-  if (!assetForm.value.CategoryID) {
-    alert('กรุณาเลือกหมวดหมู่ทรัพย์สิน')
+  if (
+    assetForm.value.CategoryID === '' ||
+    assetForm.value.CategoryID === null
+  ) {
+    alert('กรุณาเลือกหมวดหมู่')
     return
   }
 
-  const quantity = Number(assetForm.value.TotalQuantity)
+  if (
+    assetForm.value.CategoryID === '__other__' &&
+    !newCategoryName.value.trim()
+  ) {
+    alert('กรุณาระบุชื่อหมวดหมู่ใหม่')
+    return
+  }
+
   if (!Number.isInteger(quantity) || quantity < 1) {
-    alert('จำนวนทรัพย์สินต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป')
+    alert('จำนวนต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป')
     return
   }
 
+  // เก็บสถานะก่อนปิดฟอร์ม เพื่อแสดงข้อความให้ถูกต้อง
+  const isEditing = Boolean(editingAsset.value)
   savingAsset.value = true
 
   try {
+    const categoryId = await getCategoryIdForSaving()
     const formData = new FormData()
-    formData.append('AssetName', assetForm.value.AssetName.trim())
+
+    formData.append('AssetName', name)
     formData.append('SerialNumber', assetForm.value.SerialNumber.trim())
-    formData.append('CategoryID', String(assetForm.value.CategoryID))
+    formData.append('CategoryID', String(categoryId))
+    formData.append('Details', assetForm.value.Details.trim())
     formData.append('Status', assetForm.value.Status)
     formData.append('TotalQuantity', String(quantity))
 
@@ -545,126 +801,152 @@ async function saveAsset() {
       formData.append('image', selectedImage.value)
     }
 
-    if (editingAsset.value) {
+    if (isEditing) {
       await api.put(`/assets/${editingAsset.value.AssetID}`, formData)
-      alert('แก้ไขทรัพย์สินเรียบร้อยแล้ว')
     } else {
       await api.post('/assets', formData)
-      alert('เพิ่มทรัพย์สินเรียบร้อยแล้ว')
     }
 
+    // ปิดฟอร์มและโหลดข้อมูลใหม่หลัง API สำเร็จเท่านั้น
     showAssetForm.value = false
     editingAsset.value = null
     selectedImage.value = null
     imagePreview.value = ''
+    newCategoryName.value = ''
     releasePreviewUrl()
 
-    await loadAll()
+    if (imageInput.value) imageInput.value.value = ''
+
+    await Promise.all([loadAssets(), loadStats(), loadCategories()])
+
+    alert(isEditing ? 'แก้ไขทรัพย์สินสำเร็จ' : 'เพิ่มทรัพย์สินสำเร็จ')
   } catch (error) {
     console.error('Save asset error:', error)
-    alert(error.response?.data?.message || 'ไม่สามารถบันทึกทรัพย์สินได้')
+
+    alert(
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      'บันทึกทรัพย์สินไม่สำเร็จ'
+    )
   } finally {
     savingAsset.value = false
   }
 }
 
-async function deleteAsset(assetId) {
-  if (deletingAssetIds.value.includes(assetId)) return
-  if (!confirm('คุณต้องการลบทรัพย์สินรายการนี้หรือไม่?')) return
+async function deleteAsset(id) {
+  if (isDeleting(id)) return
 
-  deletingAssetIds.value.push(assetId)
+  const asset = assets.value.find(
+    item => String(item.AssetID) === String(id)
+  )
+
+  const assetName = asset?.AssetName || `ID ${id}`
+
+  if (!confirm(
+    `ยืนยันการลบทรัพย์สิน "${assetName}" หรือไม่?\n\n` +
+    'หากมีประวัติการยืมคืน ระบบอาจไม่อนุญาตให้ลบ'
+  )) {
+    return
+  }
+
+  deletingAssetIds.value.push(id)
 
   try {
-    await api.delete(`/assets/${assetId}`)
-    alert('ลบทรัพย์สินเรียบร้อยแล้ว')
-    await loadAll()
+    const response = await api.delete(`/assets/${encodeURIComponent(id)}`)
+
+    // เอาออกจากหน้าจอทันทีหลัง API ตอบว่าสำเร็จ
+    assets.value = assets.value.filter(
+      item => String(item.AssetID) !== String(id)
+    )
+
+    alert(response.data?.message || 'ลบทรัพย์สินสำเร็จ')
+
+    await Promise.all([loadAssets(), loadStats(), loadBorrows()])
   } catch (error) {
     console.error('Delete asset error:', error)
-    alert(error.response?.data?.message || 'ไม่สามารถลบทรัพย์สินได้')
+
+    const status = error.response?.status
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      'ลบทรัพย์สินไม่สำเร็จ'
+
+    alert(`${status ? `HTTP ${status}: ` : ''}${message}`)
   } finally {
-    deletingAssetIds.value = deletingAssetIds.value.filter(id => id !== assetId)
+    deletingAssetIds.value = deletingAssetIds.value.filter(
+      item => String(item) !== String(id)
+    )
   }
 }
 
-async function approveBorrow(transactionId) {
-  if (processingBorrowIds.value.includes(transactionId)) return
-  if (!confirm('ยืนยันการอนุมัติการยืมทรัพย์สินรายการนี้หรือไม่?')) return
+async function approveBorrow(id) {
+  if (processingBorrowIds.value.includes(id)) return
+  if (!confirm('ยืนยันอนุมัติการยืมหรือไม่?')) return
 
-  processingBorrowIds.value.push(transactionId)
+  processingBorrowIds.value.push(id)
 
   try {
-    await api.put(`/borrow/${transactionId}/approve`)
-    alert('อนุมัติการยืมเรียบร้อยแล้ว')
+    await api.put(`/borrow/${id}/approve`)
+    alert('อนุมัติการยืมสำเร็จ')
     await loadAll()
   } catch (error) {
-    console.error('Approve borrow error:', error)
-    alert(error.response?.data?.message || 'ไม่สามารถอนุมัติการยืมได้')
+    alert(error.response?.data?.message || 'อนุมัติการยืมไม่สำเร็จ')
   } finally {
-    processingBorrowIds.value = processingBorrowIds.value.filter(id => id !== transactionId)
+    processingBorrowIds.value = processingBorrowIds.value.filter(item => item !== id)
   }
 }
 
-async function rejectBorrow(transactionId) {
-  if (processingBorrowIds.value.includes(transactionId)) return
-  if (!confirm('ยืนยันการปฏิเสธคำขอยืมรายการนี้หรือไม่?')) return
+async function rejectBorrow(id) {
+  if (processingBorrowIds.value.includes(id)) return
+  if (!confirm('ยืนยันปฏิเสธคำขอยืมหรือไม่?')) return
 
-  processingBorrowIds.value.push(transactionId)
+  processingBorrowIds.value.push(id)
 
   try {
-    await api.put(`/borrow/${transactionId}/reject`)
-    alert('ปฏิเสธคำขอยืมเรียบร้อยแล้ว')
+    await api.put(`/borrow/${id}/reject`)
+    alert('ปฏิเสธคำขอยืมสำเร็จ')
     await loadAll()
   } catch (error) {
-    console.error('Reject borrow error:', error)
-    alert(error.response?.data?.message || 'ไม่สามารถปฏิเสธการยืมได้')
+    alert(error.response?.data?.message || 'ปฏิเสธคำขอยืมไม่สำเร็จ')
   } finally {
-    processingBorrowIds.value = processingBorrowIds.value.filter(id => id !== transactionId)
+    processingBorrowIds.value = processingBorrowIds.value.filter(item => item !== id)
   }
 }
 
 async function approveReturn(item) {
-  const transactionId = item.TransactionID
+  const id = item.TransactionID
 
-  if (processingReturnIds.value.includes(transactionId)) return
+  if (processingReturnIds.value.includes(id)) return
 
   if (!item.ReturnProofPath) {
-    alert('ไม่พบรูปหลักฐานการคืน กรุณาตรวจสอบก่อนอนุมัติ')
+    alert('ไม่พบรูปหลักฐานการคืน')
     return
   }
 
-  const confirmed = confirm(
-    `ยืนยันการคืนทรัพย์สินรายการนี้หรือไม่?\n\n` +
-    `พนักงาน: ${item.EmployeeName || item.Name || '-'}\n` +
-    `แผนก: ${item.DepartmentName || item.Department || '-'}\n` +
-    `ทรัพย์สิน: ${item.AssetName || '-'}\n` +
-    `Serial Number: ${item.SerialNumber || '-'}\n\n` +
-    `เมื่ออนุมัติ สถานะจะเปลี่ยนเป็น "คืนแล้ว" ` +
-    `และระบบจะคำนวณสต็อกใหม่`
-  )
+  if (!confirm('ยืนยันอนุมัติการคืนทรัพย์สินหรือไม่?')) return
 
-  if (!confirmed) return
-
-  processingReturnIds.value.push(transactionId)
+  processingReturnIds.value.push(id)
 
   try {
-    await api.put(`/borrow/${transactionId}/approve-return`)
+    await api.put(`/borrow/${id}/approve-return`)
     alert('อนุมัติการคืนสำเร็จ')
     await loadAll()
   } catch (error) {
-    console.error('Approve return error:', error)
-    alert(error.response?.data?.message || 'ไม่สามารถอนุมัติการคืนได้')
+    alert(error.response?.data?.message || 'อนุมัติการคืนไม่สำเร็จ')
   } finally {
-    processingReturnIds.value = processingReturnIds.value.filter(id => id !== transactionId)
+    processingReturnIds.value = processingReturnIds.value.filter(item => item !== id)
   }
 }
 
 function formatDate(date) {
   if (!date) return '-'
 
-  const parsedDate = new Date(date)
-  if (Number.isNaN(parsedDate.getTime())) return String(date)
+  const parsed = new Date(date)
+  if (Number.isNaN(parsed.getTime())) return String(date)
 
-  return parsedDate.toLocaleDateString('th-TH', {
+  return parsed.toLocaleDateString('th-TH', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
@@ -672,25 +954,23 @@ function formatDate(date) {
 }
 
 function assetStatusText(status) {
-  const map = {
+  return ({
     Available: 'พร้อมใช้งาน',
     Borrowed: 'กำลังถูกยืม',
+    Broken: 'ชำรุด',
     Maintenance: 'ซ่อมบำรุง'
-  }
-
-  return map[status] || status || '-'
+  })[status] || status || '-'
 }
 
 function borrowStatusText(status) {
-  const map = {
+  return ({
     PendingApproval: 'รออนุมัติการยืม',
     Borrowed: 'กำลังยืม',
     ReturnRequested: 'รออนุมัติการคืน',
     Returned: 'คืนแล้ว',
-    Rejected: 'ปฏิเสธ'
-  }
-
-  return map[status] || status || '-'
+    Rejected: 'ปฏิเสธ',
+    Late: 'เกินกำหนดคืน'
+  })[status] || status || '-'
 }
 
 onMounted(loadAll)
@@ -718,47 +998,77 @@ onBeforeUnmount(releasePreviewUrl)
 }
 
 .admin-header {
-  margin-bottom: 30px;
+  margin-bottom: 25px;
 }
 
 .admin-header h1 {
   margin: 0 0 8px;
-  font-size: 30px;
 }
 
 .admin-header p,
 .panel-header p {
-  margin: 0;
   color: #6b7280;
+  margin: 0;
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 25px;
+}
+
+.stat-card,
+.panel {
+  background: white;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.stat-card span {
+  display: block;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.stat-card strong {
+  font-size: 25px;
+}
+
+.warning {
+  border-left: 4px solid #f59e0b;
+}
+
+.success {
+  border-left: 4px solid #16a34a;
+}
+
+.panel {
+  margin-bottom: 25px;
+}
+
+.panel-header {
+  margin-bottom: 20px;
+}
+
+.panel-header h2 {
+  margin-top: 0;
 }
 
 button {
-  border: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 13px;
   cursor: pointer;
-  font-family: inherit;
-  transition: 0.2s;
-}
-
-button:hover:not(:disabled) {
-  transform: translateY(-1px);
+  font: inherit;
+  font-weight: 600;
+  margin: 2px;
 }
 
 button:disabled {
-  cursor: not-allowed;
   opacity: 0.6;
-}
-
-.refresh-btn,
-.primary-btn,
-.cancel-btn,
-.edit-btn,
-.delete-btn,
-.approve-btn,
-.reject-btn,
-.approve-return-btn {
-  padding: 10px 14px;
-  border-radius: 9px;
-  font-weight: 600;
+  cursor: not-allowed;
 }
 
 .refresh-btn {
@@ -771,8 +1081,14 @@ button:disabled {
   color: white;
 }
 
-.primary-btn:hover:not(:disabled) {
-  background: #1d4ed8;
+.edit-btn {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.delete-btn {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .cancel-btn {
@@ -780,109 +1096,17 @@ button:disabled {
   color: #374151;
 }
 
-.edit-btn {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.delete-btn,
-.reject-btn {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.approve-btn {
-  background: #dcfce7;
-  color: #15803d;
-}
-
-.approve-return-btn {
-  background: #16a34a;
-  color: white;
-  min-width: 175px;
-}
-
-.approve-return-btn:hover:not(:disabled) {
-  background: #15803d;
-}
-
-.dashboard {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 30px;
-}
-
-.stat-card {
-  min-width: 0;
-  background: white;
-  border-radius: 16px;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.06);
-}
-
-.stat-icon {
-  font-size: 30px;
-}
-
-.stat-card span {
-  display: block;
-  color: #6b7280;
-  font-size: 13px;
-  margin-bottom: 5px;
-}
-
-.stat-card strong {
-  display: block;
-  font-size: 25px;
-}
-
-.stat-card.warning {
-  border-left: 5px solid #f59e0b;
-}
-
-.stat-card.return-warning {
-  border-left: 5px solid #7c3aed;
-}
-
-.stat-card.success {
-  border-left: 5px solid #16a34a;
-}
-
-.panel {
-  background: white;
-  border-radius: 18px;
-  padding: 25px;
-  margin-bottom: 30px;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
-}
-
-.panel-header {
-  margin-bottom: 20px;
-}
-
-.panel-header h2 {
-  margin: 0 0 6px;
-}
-
-.asset-form {
+.edit-form {
   background: #f9fafb;
-  border-radius: 14px;
   padding: 20px;
+  border-radius: 12px;
   margin-bottom: 20px;
-}
-
-.asset-form h3 {
-  margin-top: 0;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  gap: 16px;
 }
 
 .form-group label {
@@ -892,18 +1116,19 @@ button:disabled {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
   width: 100%;
-  padding: 11px 13px;
+  padding: 11px;
   border: 1px solid #d1d5db;
-  border-radius: 9px;
-  outline: none;
+  border-radius: 8px;
   background: white;
+  font: inherit;
 }
 
-.form-group input:focus,
-.form-group select:focus {
-  border-color: #2563eb;
+.form-group textarea {
+  resize: vertical;
+  min-height: 90px;
 }
 
 .form-group small {
@@ -913,27 +1138,21 @@ button:disabled {
   font-size: 12px;
 }
 
-.image-preview-group {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.image-preview {
-  width: 180px;
-  height: 130px;
-  object-fit: contain;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  background: white;
-  padding: 5px;
+.full-width {
+  grid-column: 1 / -1;
 }
 
 .form-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 20px;
+  margin-top: 18px;
+}
+
+.message {
+  padding: 12px;
+  margin-bottom: 15px;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  overflow-wrap: anywhere;
 }
 
 .table-wrapper {
@@ -943,25 +1162,28 @@ button:disabled {
 
 table {
   width: 100%;
-  min-width: 1250px;
+  min-width: 900px;
   border-collapse: collapse;
 }
 
+.asset-table {
+  min-width: 1250px;
+}
+
 .borrow-table {
-  min-width: 1800px;
+  min-width: 1500px;
 }
 
 th,
 td {
-  padding: 13px 12px;
   text-align: left;
+  padding: 12px;
   border-bottom: 1px solid #e5e7eb;
   white-space: nowrap;
 }
 
 th {
   background: #f9fafb;
-  font-size: 13px;
   color: #4b5563;
 }
 
@@ -969,125 +1191,33 @@ td {
   font-size: 14px;
 }
 
-.asset-thumbnail {
-  width: 58px;
-  height: 48px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
-}
-
-.proof-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #2563eb;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.proof-link:hover {
-  text-decoration: underline;
-}
-
-.proof-thumbnail {
-  width: 65px;
-  height: 50px;
-  object-fit: cover;
-  border-radius: 8px;
-  border: 1px solid #d1d5db;
-  background: #f9fafb;
-}
-
-.no-image {
-  color: #9ca3af;
-  font-size: 12px;
-}
-
-.status {
-  display: inline-block;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.status.Available,
-.status.Returned {
-  background: #dcfce7;
-  color: #15803d;
-}
-
-.status.Borrowed {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.status.Maintenance,
-.status.PendingApproval {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.status.ReturnRequested {
-  background: #f3e8ff;
-  color: #7e22ce;
-}
-
-.status.Rejected {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.action-buttons,
-.borrow-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.borrow-actions {
-  flex-wrap: wrap;
-  min-width: 175px;
-}
-
-.return-alert {
-  background: #f3e8ff;
-  color: #6b21a8;
-  border: 1px solid #d8b4fe;
-  border-radius: 12px;
-  padding: 14px 18px;
-  margin-bottom: 20px;
-}
-
-.waiting-text {
-  color: #6b7280;
-  font-size: 13px;
-}
-
-.returned-text {
-  color: #15803d;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.rejected-text {
-  color: #dc2626;
-  font-weight: 600;
-  font-size: 13px;
+.details-cell {
+  white-space: normal;
+  min-width: 220px;
+  max-width: 320px;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
 }
 
 .empty {
   text-align: center;
-  padding: 30px;
   color: #9ca3af;
+  padding: 25px;
 }
 
-@media (max-width: 1400px) {
-  .dashboard {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
+.asset-thumbnail {
+  width: 55px;
+  height: 45px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.image-preview {
+  display: block;
+  width: 180px;
+  max-height: 150px;
+  object-fit: contain;
+  margin-bottom: 10px;
 }
 
 @media (max-width: 800px) {
@@ -1097,8 +1227,8 @@ td {
 
   .admin-header,
   .panel-header {
-    flex-direction: column;
     align-items: flex-start;
+    flex-direction: column;
   }
 
   .dashboard {
@@ -1109,22 +1239,14 @@ td {
     grid-template-columns: 1fr;
   }
 
-  .panel {
-    padding: 16px;
+  .full-width {
+    grid-column: auto;
   }
 }
 
 @media (max-width: 500px) {
   .dashboard {
     grid-template-columns: 1fr;
-  }
-
-  .admin-header h1 {
-    font-size: 24px;
-  }
-
-  .form-actions {
-    flex-wrap: wrap;
   }
 }
 </style>

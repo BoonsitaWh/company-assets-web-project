@@ -20,10 +20,25 @@
     <div class="card-content">
       <h3>{{ asset.AssetName }}</h3>
 
-      <p>ประเภท: {{ asset.CategoryName || '-' }}</p>
-      <p>Serial: {{ asset.SerialNumber || '-' }}</p>
-      <p>สถานที่เก็บ: {{ asset.Location || '-' }}</p>
+      <p>
+        <strong>ประเภท:</strong>
+        {{ asset.CategoryName || '-' }}
+      </p>
 
+      <p>
+        <strong>Serial Number:</strong>
+        {{ asset.SerialNumber || '-' }}
+      </p>
+
+      <!-- เปลี่ยนจากสถานที่เก็บเป็นรายละเอียดทรัพย์สิน -->
+      <div class="details-box">
+        <h4>รายละเอียดทรัพย์สิน</h4>
+        <p class="details-text">
+          {{ asset.Details || 'ยังไม่มีรายละเอียดทรัพย์สิน' }}
+        </p>
+      </div>
+
+      <!-- จำนวนทรัพย์สิน -->
       <div class="quantity-box">
         <p>
           จำนวนทั้งหมด:
@@ -44,14 +59,17 @@
         </p>
       </div>
 
-      <p>
+      <!-- สถานะทรัพย์สิน -->
+      <p class="status-row">
         <span class="badge" :class="asset.Status">
           {{ statusText(asset.Status) }}
         </span>
       </p>
 
+      <!-- ปุ่มขอยืม -->
       <button
         v-if="isMember && availableQuantity > 0"
+        type="button"
         @click="$emit('borrow', asset)"
       >
         ขอยืม
@@ -173,12 +191,42 @@ function statusText(status) {
   margin: 0 0 12px;
   color: #1e293b;
   font-size: 20px;
+  overflow-wrap: anywhere;
 }
 
 .card-content > p {
   margin: 9px 0;
   color: #64748b;
   font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.card-content > p strong {
+  color: #334155;
+}
+
+/* กล่องรายละเอียดทรัพย์สิน */
+.details-box {
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid #e0e7ff;
+  border-left: 4px solid #4f46e5;
+  border-radius: 10px;
+  background: #f8faff;
+}
+
+.details-box h4 {
+  margin: 0 0 8px;
+  color: #3730a3;
+  font-size: 14px;
+}
+
+.details-text {
+  margin: 0;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
@@ -198,6 +246,10 @@ function statusText(status) {
 .available-quantity {
   color: #15803d;
   font-size: 17px;
+}
+
+.status-row {
+  margin: 12px 0;
 }
 
 .badge {
@@ -232,6 +284,7 @@ function statusText(status) {
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.2s;
 }
 
 .card button:hover {

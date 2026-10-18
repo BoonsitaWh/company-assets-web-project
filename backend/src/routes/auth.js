@@ -1,4 +1,3 @@
-
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -12,20 +11,17 @@ const router = Router();
    RESET PASSWORD TOKEN STORAGE
    เก็บโทเคนชั่วคราว อายุ 15 นาที
 ========================================================= */
-
 const resetTokens = new Map();
 
 /* =========================================================
    PASSWORD POLICY
 ========================================================= */
-
 const passwordPolicy =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
 
 /* =========================================================
    JWT
 ========================================================= */
-
 function sign(user) {
   const secret = process.env.JWT_SECRET;
 
@@ -42,7 +38,6 @@ function sign(user) {
    REGISTER EMPLOYEE
    POST /api/auth/register
 ========================================================= */
-
 router.post('/register', async (req, res, next) => {
   try {
     const {
@@ -92,7 +87,7 @@ router.post('/register', async (req, res, next) => {
 
     const [result] = await pool.query(
       `INSERT INTO Employee
-        (Name, DepartmentID, Email, Phone, Password)
+       (Name, DepartmentID, Email, Phone, Password)
        VALUES (?, ?, ?, ?, ?)`,
       [
         name,
@@ -121,7 +116,6 @@ router.post('/register', async (req, res, next) => {
 
    POST /api/auth/login
 ========================================================= */
-
 router.post('/login', async (req, res, next) => {
   try {
     const { username, password } = req.body;
@@ -187,12 +181,7 @@ router.post('/login', async (req, res, next) => {
 
     // 2. ตรวจสอบ Employee
     const [employees] = await pool.query(
-      `SELECT
-         EmployeeID,
-         Name,
-         Email,
-         Password,
-         DepartmentID
+      `SELECT EmployeeID, Name, Email, Password, DepartmentID
        FROM Employee
        WHERE Email = ?
        LIMIT 1`,
@@ -247,17 +236,147 @@ router.post('/login', async (req, res, next) => {
 });
 
 /* =========================================================
+   GET CURRENT USER PROFILE
+   GET /api/auth/me
+   รองรับทั้ง Admin และ Employee
+========================================================= */
+router.get('/me', async (req, res, next) => {
+  try {
+    // 1. ตรวจสอบ Authorization Header
+    const authHeader = req.headers.authorization || '';
+    const [scheme, token] = authHeader.trim().split(/\s+/);
+
+    if (
+      scheme?.toLowerCase() !== 'bearer' ||
+      !token
+    ) {
+      return res.status(401).json({
+        success: false,
+        message: 'กรุณาเข้าสู่ระบบใหม่'
+      });
+    }
+
+    // 2. ตรวจสอบ JWT_SECRET
+    const secret = process.env.JWT_SECRET;
+
+    if (!secret) {
+      return res.status(500).json({
+        success: false,
+        message: 'ระบบยังไม่ได้ตั้งค่า JWT_SECRET'
+      });
+    }
+
+    // 3. ตรวจสอบ Token
+    let decoded;
+
+    try {
+      decoded = jwt.verify(token, secret);
+    } catch {
+      return res.status(401).json({
+        success: false,
+        message:
+          'เซสชันหมดอายุหรือ Token ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่'
+      });
+    }
+
+    // 4. อนุญาตเฉพาะประเภทบัญชีที่ระบบรองรับ
+    if (!['admin', 'employee'].includes(decoded.type)) {
+      return res.status(403).json({
+        success: false,
+        message: 'ไม่มีสิทธิ์เข้าถึงข้อมูล'
+      });
+    }
+
+    // 5. ถ้าเป็น Admin ให้ค้นหาจากตาราง Admin
+    if (decoded.type === 'admin') {
+      const [admins] = await pool.query(
+        `SELECT AdminID, Username, Role
+         FROM Admin
+         WHERE AdminID = ?
+         LIMIT 1`,
+        [decoded.id]
+      );
+
+      if (admins.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'ไม่พบบัญชี Admin'
+        });
+      }
+
+      const admin = admins[0];
+
+      return res.json({
+        success: true,
+        user: {
+          id: admin.AdminID,
+          name: admin.Username,
+          username: admin.Username,
+          role: admin.Role,
+          type: 'admin'
+        }
+      });
+    }
+
+    // 6. ถ้าเป็น Employee ให้ค้นหาจากตาราง Employee
+    const [employees] = await pool.query(
+      `SELECT
+         e.EmployeeID,
+         e.Name,
+         e.Email,
+         e.Phone,
+         e.DepartmentID,
+         d.DepartmentName
+       FROM Employee e
+       LEFT JOIN Department d
+         ON e.DepartmentID = d.DepartmentID
+       WHERE e.EmployeeID = ?
+       LIMIT 1`,
+      [decoded.id]
+    );
+
+    if (employees.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'ไม่พบบัญชีพนักงาน'
+      });
+    }
+
+    const employee = employees[0];
+
+    return res.json({
+      success: true,
+      user: {
+        id: employee.EmployeeID,
+        name: employee.Name,
+        email: employee.Email,
+        phone: employee.Phone,
+        departmentId: employee.DepartmentID,
+        departmentName: employee.DepartmentName,
+        role: 'Customer',
+        type: 'employee'
+      }
+    });
+  } catch (error) {
+    console.error('GET PROFILE ERROR:', error.message);
+    next(error);
+  }
+});
+
+/* =========================================================
    FORGOT PASSWORD
    POST /api/auth/forgot-password
 ========================================================= */
-
 router.post('/forgot-password', async (req, res) => {
   let tokenHash = null;
 
   try {
     const email = req.body?.email;
 
-    if (typeof email !== 'string' || !email.trim()) {
+    if (
+      typeof email !== 'string' ||
+      !email.trim()
+    ) {
       return res.status(400).json({
         success: false,
         message: 'กรุณากรอกอีเมล'
@@ -277,7 +396,6 @@ router.post('/forgot-password', async (req, res) => {
     const genericMessage =
       'หากอีเมลนี้ลงทะเบียนไว้ ระบบจะส่งลิงก์รีเซ็ตรหัสผ่านให้';
 
-    // ไม่เปิดเผยว่าอีเมลมีบัญชีอยู่หรือไม่
     if (employees.length === 0) {
       return res.json({
         success: true,
@@ -293,7 +411,9 @@ router.post('/forgot-password', async (req, res) => {
       FRONTEND_URL
     } = process.env;
 
-    const mailPort = Number(process.env.MAIL_PORT || 587);
+    const mailPort = Number(
+      process.env.MAIL_PORT || 587
+    );
 
     if (
       !MAIL_HOST ||
@@ -309,7 +429,8 @@ router.post('/forgot-password', async (req, res) => {
 
       return res.status(500).json({
         success: false,
-        message: 'ระบบส่งอีเมลยังตั้งค่าไม่ครบ กรุณาติดต่อผู้ดูแลระบบ'
+        message:
+          'ระบบส่งอีเมลยังตั้งค่าไม่ครบ กรุณาติดต่อผู้ดูแลระบบ'
       });
     }
 
@@ -328,7 +449,8 @@ router.post('/forgot-password', async (req, res) => {
     } catch {
       return res.status(500).json({
         success: false,
-        message: 'การตั้งค่า URL สำหรับรีเซ็ตรหัสผ่านไม่ถูกต้อง'
+        message:
+          'การตั้งค่า URL สำหรับรีเซ็ตรหัสผ่านไม่ถูกต้อง'
       });
     }
 
@@ -399,7 +521,8 @@ router.post('/forgot-password', async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: 'ส่งอีเมลไม่สำเร็จ กรุณาตรวจสอบการตั้งค่าอีเมล'
+      message:
+        'ส่งอีเมลไม่สำเร็จ กรุณาตรวจสอบการตั้งค่าอีเมล'
     });
   }
 });
@@ -408,7 +531,6 @@ router.post('/forgot-password', async (req, res) => {
    RESET PASSWORD
    POST /api/auth/reset-password
 ========================================================= */
-
 router.post('/reset-password', async (req, res, next) => {
   try {
     const { token, password } = req.body || {};
@@ -443,7 +565,8 @@ router.post('/reset-password', async (req, res, next) => {
     if (!item) {
       return res.status(400).json({
         success: false,
-        message: 'ลิงก์ไม่ถูกต้อง ถูกใช้ไปแล้ว หรือหมดอายุ กรุณาขอลิงก์ใหม่'
+        message:
+          'ลิงก์ไม่ถูกต้อง ถูกใช้ไปแล้ว หรือหมดอายุ กรุณาขอลิงก์ใหม่'
       });
     }
 
@@ -474,12 +597,12 @@ router.post('/reset-password', async (req, res, next) => {
       });
     }
 
-    // ลบโทเคนหลังเปลี่ยนรหัสผ่านสำเร็จ
     resetTokens.delete(tokenHash);
 
     return res.json({
       success: true,
-      message: 'เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่'
+      message:
+        'เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่'
     });
   } catch (error) {
     console.error('RESET PASSWORD ERROR:', error.message);
@@ -490,5 +613,4 @@ router.post('/reset-password', async (req, res, next) => {
 /* =========================================================
    EXPORT ROUTER
 ========================================================= */
-
 export default router;

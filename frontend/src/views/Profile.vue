@@ -19,6 +19,14 @@
         <span class="role-badge">{{ roleText }}</span>
       </div>
 
+      <p v-if="loading" class="status-message">
+        กำลังโหลดข้อมูลโปรไฟล์...
+      </p>
+
+      <p v-if="error" class="error-message" role="alert">
+        {{ error }}
+      </p>
+
       <div class="profile-fields">
         <div class="field">
           <span>ชื่อผู้ใช้งาน</span>
@@ -48,7 +56,7 @@
 
       <p class="notice">
         หากข้อมูลไม่ครบหรือไม่ถูกต้อง โปรดติดต่อผู้ดูแลระบบ
-        การแก้ไขข้อมูลในฐานข้อมูลต้องเชื่อมกับ API ของระบบก่อน
+        ข้อมูลเบอร์โทรศัพท์และแผนกจะอ่านจากฐานข้อมูลผ่าน API
       </p>
 
       <div class="actions">
@@ -71,66 +79,65 @@
         >
           ไปหน้า Admin
         </router-link>
+
+        <button
+          v-if="user?.type === 'employee'"
+          type="button"
+          class="secondary-btn"
+          @click="loadProfile"
+          :disabled="loading"
+        >
+          {{ loading ? 'กำลังโหลด...' : '🔄 โหลดข้อมูลใหม่' }}
+        </button>
       </div>
     </section>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import api from '../api';
 
-let savedUser = null;
+const user = ref({});
+const loading = ref(false);
+const error = ref('');
 
-try {
-  savedUser = JSON.parse(localStorage.getItem('user') || 'null');
-} catch {
-  savedUser = null;
+function readSavedUser() {
+  try {
+    return JSON.parse(localStorage.getItem('user') || 'null') || {};
+  } catch {
+    return {};
+  }
 }
 
-const user = computed(() => savedUser || {});
-
-function firstValue(...values) {
-  return values.find(
-    value => value !== undefined &&
-             value !== null &&
-             String(value).trim() !== ''
-  );
-}
+user.value = readSavedUser();
 
 const name = computed(() =>
-  firstValue(
-    user.value.name,
-    user.value.Name,
-    user.value.fullName,
-    user.value.FullName,
-    user.value.username,
-    user.value.Username
-  )
+  user.value.name ||
+  user.value.Name ||
+  user.value.fullName ||
+  user.value.username ||
+  ''
 );
 
 const email = computed(() =>
-  firstValue(
-    user.value.email,
-    user.value.Email
-  )
+  user.value.email || user.value.Email || ''
 );
 
 const phone = computed(() =>
-  firstValue(
-    user.value.phone,
-    user.value.Phone,
-    user.value.phoneNumber,
-    user.value.PhoneNumber
-  )
+  user.value.phone ??
+  user.value.Phone ??
+  user.value.phoneNumber ??
+  user.value.PhoneNumber ??
+  ''
 );
 
 const department = computed(() =>
-  firstValue(
-    user.value.departmentName,
-    user.value.DepartmentName,
-    user.value.department,
-    user.value.Department
-  )
+  user.value.departmentName ??
+  user.value.DepartmentName ??
+  user.value.department ??
+  user.value.Department ??
+  ''
 );
 
 const roleText = computed(() => {
@@ -140,8 +147,59 @@ const roleText = computed(() => {
 });
 
 function displayValue(value) {
-  return value || 'ไม่มีข้อมูล';
+  if (value === undefined || value === null ||
+      String(value).trim() === '') {
+    return 'ไม่มีข้อมูล';
+  }
+
+  return value;
 }
+
+async function loadProfile() {
+  // Admin ใช้ข้อมูลบัญชีที่ได้จาก Login เหมือนเดิม
+  if (user.value.type !== 'employee') return;
+
+  const token = localStorage.getItem('token');
+
+  if (!token) {
+    error.value = 'ไม่พบ Token กรุณาเข้าสู่ระบบใหม่';
+    return;
+  }
+
+  loading.value = true;
+  error.value = '';
+
+  try {
+    const { data } = await api.get('/auth/me', {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (!data?.user) {
+      throw new Error('ไม่พบข้อมูลโปรไฟล์จากเซิร์ฟเวอร์');
+    }
+
+    // เก็บข้อมูลล่าสุดไว้ใช้ในหน้าอื่นด้วย
+    user.value = {
+      ...user.value,
+      ...data.user
+    };
+
+    localStorage.setItem('user', JSON.stringify(user.value));
+  } catch (e) {
+    error.value =
+      e.response?.data?.message ||
+      e.message ||
+      'โหลดข้อมูลโปรไฟล์ไม่สำเร็จ';
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(() => {
+  loadProfile();
+});
 </script>
 
 <style scoped>
@@ -269,6 +327,19 @@ function displayValue(value) {
   line-height: 1.8;
 }
 
+.status-message {
+  color: #2563eb;
+  font-size: 14px;
+}
+
+.error-message {
+  padding: 12px;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 14px;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -284,9 +355,12 @@ function displayValue(value) {
   text-decoration: none;
   font-size: 14px;
   font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .primary-btn {
+  border: none;
   background: #2563eb;
   color: white;
 }
@@ -299,6 +373,11 @@ function displayValue(value) {
   border: 1px solid #cbd5e1;
   background: white;
   color: #334155;
+}
+
+.secondary-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 @media (max-width: 650px) {
