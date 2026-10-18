@@ -1,3 +1,4 @@
+
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -9,18 +10,13 @@ const router = Router();
 
 /* =========================================================
    RESET PASSWORD TOKEN STORAGE
-   เก็บ token ชั่วคราวไว้ใน Memory
+   เก็บโทเคนชั่วคราว อายุ 15 นาที
 ========================================================= */
 
 const resetTokens = new Map();
 
 /* =========================================================
    PASSWORD POLICY
-   อย่างน้อย 8 ตัว
-   มี A-Z
-   มี a-z
-   มีตัวเลข
-   มีอักขระพิเศษ
 ========================================================= */
 
 const passwordPolicy =
@@ -64,20 +60,25 @@ router.post('/register', async (req, res, next) => {
       });
     }
 
-    if (!passwordPolicy.test(password)) {
+    if (
+      typeof password !== 'string' ||
+      !passwordPolicy.test(password)
+    ) {
       return res.status(400).json({
         success: false,
         message:
-          'Password ต้องมีอย่างน้อย 8 ตัวอักษร, A-Z, a-z, ตัวเลข และอักขระพิเศษ'
+          'Password ต้องมีอย่างน้อย 8 ตัวอักษร ประกอบด้วย A-Z, a-z, ตัวเลข และอักขระพิเศษ'
       });
     }
+
+    const emailValue = String(email).trim();
 
     const [exists] = await pool.query(
       `SELECT EmployeeID
        FROM Employee
        WHERE Email = ?
        LIMIT 1`,
-      [email.trim()]
+      [emailValue]
     );
 
     if (exists.length > 0) {
@@ -96,7 +97,7 @@ router.post('/register', async (req, res, next) => {
       [
         name,
         departmentId,
-        email.trim(),
+        emailValue,
         phone || null,
         hash
       ]
@@ -107,16 +108,15 @@ router.post('/register', async (req, res, next) => {
       message: 'สมัครสมาชิกสำเร็จ',
       employeeId: result.insertId
     });
-
   } catch (error) {
-    console.error('REGISTER ERROR:', error);
+    console.error('REGISTER ERROR:', error.message);
     next(error);
   }
 });
 
 /* =========================================================
    LOGIN
-   Admin    = Username + Password
+   Admin = Username + Password
    Employee = Email + Password
 
    POST /api/auth/login
@@ -124,12 +124,14 @@ router.post('/register', async (req, res, next) => {
 
 router.post('/login', async (req, res, next) => {
   try {
-    const {
-      username,
-      password
-    } = req.body;
+    const { username, password } = req.body;
 
-    if (!username || !password) {
+    if (
+      typeof username !== 'string' ||
+      !username.trim() ||
+      typeof password !== 'string' ||
+      !password
+    ) {
       return res.status(400).json({
         success: false,
         message: 'กรุณากรอก Username/Email และ Password'
@@ -138,16 +140,9 @@ router.post('/login', async (req, res, next) => {
 
     const loginValue = username.trim();
 
-    /* =====================================================
-       1. CHECK ADMIN
-    ===================================================== */
-
+    // 1. ตรวจสอบ Admin
     const [admins] = await pool.query(
-      `SELECT
-        AdminID,
-        Username,
-        Password,
-        Role
+      `SELECT AdminID, Username, Password, Role
        FROM Admin
        WHERE Username = ?
        LIMIT 1`,
@@ -157,21 +152,12 @@ router.post('/login', async (req, res, next) => {
     if (admins.length > 0) {
       const admin = admins[0];
 
-      console.log(
-        'Admin login attempt:',
-        admin.Username
-      );
-
       const passwordCorrect = await bcrypt.compare(
         password,
         admin.Password
       );
 
       if (!passwordCorrect) {
-        console.log(
-          'Admin password incorrect'
-        );
-
         return res.status(401).json({
           success: false,
           message: 'Username หรือ Password ไม่ถูกต้อง'
@@ -185,17 +171,10 @@ router.post('/login', async (req, res, next) => {
         type: 'admin'
       });
 
-      console.log(
-        'Admin login successful:',
-        admin.Username
-      );
-
       return res.json({
         success: true,
         message: 'เข้าสู่ระบบ Admin สำเร็จ',
-
         token,
-
         user: {
           id: admin.AdminID,
           name: admin.Username,
@@ -206,17 +185,14 @@ router.post('/login', async (req, res, next) => {
       });
     }
 
-    /* =====================================================
-       2. CHECK EMPLOYEE
-    ===================================================== */
-
+    // 2. ตรวจสอบ Employee
     const [employees] = await pool.query(
       `SELECT
-        EmployeeID,
-        Name,
-        Email,
-        Password,
-        DepartmentID
+         EmployeeID,
+         Name,
+         Email,
+         Password,
+         DepartmentID
        FROM Employee
        WHERE Email = ?
        LIMIT 1`,
@@ -226,8 +202,7 @@ router.post('/login', async (req, res, next) => {
     if (employees.length === 0) {
       return res.status(401).json({
         success: false,
-        message:
-          'Username/Email หรือ Password ไม่ถูกต้อง'
+        message: 'Username/Email หรือ Password ไม่ถูกต้อง'
       });
     }
 
@@ -241,8 +216,7 @@ router.post('/login', async (req, res, next) => {
     if (!passwordCorrect) {
       return res.status(401).json({
         success: false,
-        message:
-          'Username/Email หรือ Password ไม่ถูกต้อง'
+        message: 'Username/Email หรือ Password ไม่ถูกต้อง'
       });
     }
 
@@ -257,9 +231,7 @@ router.post('/login', async (req, res, next) => {
     return res.json({
       success: true,
       message: 'เข้าสู่ระบบสำเร็จ',
-
       token,
-
       user: {
         id: employee.EmployeeID,
         name: employee.Name,
@@ -268,13 +240,8 @@ router.post('/login', async (req, res, next) => {
         type: 'employee'
       }
     });
-
   } catch (error) {
-    console.error(
-      'LOGIN ERROR:',
-      error
-    );
-
+    console.error('LOGIN ERROR:', error.message);
     next(error);
   }
 });
@@ -284,110 +251,156 @@ router.post('/login', async (req, res, next) => {
    POST /api/auth/forgot-password
 ========================================================= */
 
-router.post('/forgot-password', async (req, res, next) => {
-  try {
-    const { email } = req.body;
+router.post('/forgot-password', async (req, res) => {
+  let tokenHash = null;
 
-    if (!email) {
+  try {
+    const email = req.body?.email;
+
+    if (typeof email !== 'string' || !email.trim()) {
       return res.status(400).json({
         success: false,
-        message: 'กรุณากรอก Email'
+        message: 'กรุณากรอกอีเมล'
       });
     }
 
     const emailValue = email.trim();
 
-    const [rows] = await pool.query(
-      `SELECT
-        EmployeeID,
-        Name,
-        Email
+    const [employees] = await pool.query(
+      `SELECT EmployeeID, Name, Email
        FROM Employee
        WHERE Email = ?
        LIMIT 1`,
       [emailValue]
     );
 
-    /*
-      ไม่เปิดเผยว่า Email มีอยู่ในระบบหรือไม่
-    */
+    const genericMessage =
+      'หากอีเมลนี้ลงทะเบียนไว้ ระบบจะส่งลิงก์รีเซ็ตรหัสผ่านให้';
 
-    if (rows.length === 0) {
+    // ไม่เปิดเผยว่าอีเมลมีบัญชีอยู่หรือไม่
+    if (employees.length === 0) {
       return res.json({
         success: true,
-        message:
-          'หากอีเมลนี้อยู่ในระบบ จะได้รับลิงก์ reset password'
+        message: genericMessage
       });
     }
 
-    /* =====================================================
-       สร้าง Reset Token
-    ===================================================== */
+    const {
+      MAIL_HOST,
+      MAIL_USER,
+      MAIL_PASS,
+      MAIL_FROM,
+      FRONTEND_URL
+    } = process.env;
 
-    const rawToken = crypto
-      .randomBytes(32)
-      .toString('hex');
+    const mailPort = Number(process.env.MAIL_PORT || 587);
 
-    const tokenHash = crypto
+    if (
+      !MAIL_HOST ||
+      !MAIL_USER ||
+      !MAIL_PASS ||
+      !MAIL_FROM ||
+      !FRONTEND_URL ||
+      !Number.isInteger(mailPort) ||
+      mailPort < 1 ||
+      mailPort > 65535
+    ) {
+      console.error('Email configuration is incomplete');
+
+      return res.status(500).json({
+        success: false,
+        message: 'ระบบส่งอีเมลยังตั้งค่าไม่ครบ กรุณาติดต่อผู้ดูแลระบบ'
+      });
+    }
+
+    let frontendUrl;
+
+    try {
+      frontendUrl = new URL(FRONTEND_URL);
+
+      if (
+        !['http:', 'https:'].includes(frontendUrl.protocol) ||
+        frontendUrl.username ||
+        frontendUrl.password
+      ) {
+        throw new Error('Invalid FRONTEND_URL');
+      }
+    } catch {
+      return res.status(500).json({
+        success: false,
+        message: 'การตั้งค่า URL สำหรับรีเซ็ตรหัสผ่านไม่ถูกต้อง'
+      });
+    }
+
+    // สร้างโทเคนสุ่ม 256 บิต
+    const rawToken = crypto.randomBytes(32).toString('hex');
+
+    tokenHash = crypto
       .createHash('sha256')
       .update(rawToken)
       .digest('hex');
 
-    /* =====================================================
-       เก็บ Token
-       อายุ 15 นาที
-    ===================================================== */
+    // ล้างโทเคนหมดอายุ
+    for (const [key, value] of resetTokens.entries()) {
+      if (value.expires <= Date.now()) {
+        resetTokens.delete(key);
+      }
+    }
 
+    // โทเคนใหม่มีอายุ 15 นาที
     resetTokens.set(tokenHash, {
-      employeeId: rows[0].EmployeeID,
+      employeeId: employees[0].EmployeeID,
       expires: Date.now() + 15 * 60 * 1000
     });
 
-    /* =====================================================
-       EMAIL
-    ===================================================== */
-
     const transporter = nodemailer.createTransport({
-      host: process.env.MAIL_HOST,
-      port: Number(
-        process.env.MAIL_PORT || 587
-      ),
-      secure: false,
-
+      host: MAIL_HOST,
+      port: mailPort,
+      secure: mailPort === 465,
       auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS
-      }
+        user: MAIL_USER,
+        pass: MAIL_PASS
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000
     });
 
-    const link =
-      `${process.env.FRONTEND_URL}/reset-password/${rawToken}`;
+    frontendUrl.pathname =
+      `${frontendUrl.pathname.replace(/\/+$/, '')}/reset-password/${rawToken}`;
+
+    frontendUrl.search = '';
+    frontendUrl.hash = '';
+
+    const resetLink = frontendUrl.toString();
 
     await transporter.sendMail({
-      from: process.env.MAIL_FROM,
+      from: MAIL_FROM,
       to: emailValue,
-
-      subject:
-        'Reset Password - Company Asset System',
-
+      subject: 'Reset Password - Company Asset System',
       text:
-        `กดลิงก์เพื่อเปลี่ยนรหัสผ่าน: ${link}\n` +
-        `ลิงก์หมดอายุภายใน 15 นาที`
+        `สวัสดี ${employees[0].Name || ''}\n\n` +
+        `คลิกลิงก์ด้านล่างเพื่อตั้งรหัสผ่านใหม่:\n` +
+        `${resetLink}\n\n` +
+        `ลิงก์หมดอายุภายใน 15 นาทีและใช้ได้เพียงครั้งเดียว\n\n` +
+        `หากคุณไม่ได้ร้องขอ กรุณาเพิกเฉยต่ออีเมลฉบับนี้`
     });
 
     return res.json({
       success: true,
-      message:
-        'หากอีเมลนี้อยู่ในระบบ จะได้รับลิงก์ reset password'
+      message: genericMessage
     });
-
   } catch (error) {
-    console.error(
-      'FORGOT PASSWORD ERROR:',
-      error
-    );
+    if (tokenHash) {
+      resetTokens.delete(tokenHash);
+    }
 
-    next(error);
+    console.error('FORGOT PASSWORD ERROR:', error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: 'ส่งอีเมลไม่สำเร็จ กรุณาตรวจสอบการตั้งค่าอีเมล'
+    });
   }
 });
 
@@ -398,15 +411,17 @@ router.post('/forgot-password', async (req, res, next) => {
 
 router.post('/reset-password', async (req, res, next) => {
   try {
-    const {
-      token,
-      password
-    } = req.body;
+    const { token, password } = req.body || {};
 
-    if (!token || !password) {
+    if (
+      typeof token !== 'string' ||
+      !/^[a-f0-9]{64}$/i.test(token) ||
+      typeof password !== 'string' ||
+      !password
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'ข้อมูลไม่ครบ'
+        message: 'ลิงก์หรือข้อมูลไม่ถูกต้อง'
       });
     }
 
@@ -414,88 +429,60 @@ router.post('/reset-password', async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message:
-          'Password ต้องมีอย่างน้อย 8 ตัวอักษร, A-Z, a-z, ตัวเลข และอักขระพิเศษ'
+          'รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร ประกอบด้วยตัวพิมพ์เล็ก ตัวพิมพ์ใหญ่ ตัวเลข และอักขระพิเศษ'
       });
     }
-
-    /* =====================================================
-       Hash Token ที่ได้รับ
-    ===================================================== */
 
     const tokenHash = crypto
       .createHash('sha256')
       .update(token)
       .digest('hex');
 
-    /* =====================================================
-       ค้นหา Token
-    ===================================================== */
-
     const item = resetTokens.get(tokenHash);
 
     if (!item) {
       return res.status(400).json({
         success: false,
-        message:
-          'ลิงก์ reset password ไม่ถูกต้องหรือหมดอายุ'
+        message: 'ลิงก์ไม่ถูกต้อง ถูกใช้ไปแล้ว หรือหมดอายุ กรุณาขอลิงก์ใหม่'
       });
     }
 
-    /* =====================================================
-       ตรวจสอบวันหมดอายุ
-    ===================================================== */
-
-    if (item.expires < Date.now()) {
-
+    if (item.expires <= Date.now()) {
       resetTokens.delete(tokenHash);
 
       return res.status(400).json({
         success: false,
-        message:
-          'ลิงก์ reset password หมดอายุแล้ว'
+        message: 'ลิงก์หมดอายุแล้ว กรุณาขอลิงก์ใหม่'
       });
     }
 
-    /* =====================================================
-       Hash Password ใหม่
-    ===================================================== */
+    const passwordHash = await bcrypt.hash(password, 10);
 
-    const passwordHash = await bcrypt.hash(
-      password,
-      10
-    );
-
-    /* =====================================================
-       Update Employee Password
-    ===================================================== */
-
-    await pool.query(
+    const [result] = await pool.query(
       `UPDATE Employee
        SET Password = ?
        WHERE EmployeeID = ?`,
-      [
-        passwordHash,
-        item.employeeId
-      ]
+      [passwordHash, item.employeeId]
     );
 
-    /* =====================================================
-       ลบ Token หลังใช้งาน
-    ===================================================== */
+    if (result.affectedRows !== 1) {
+      resetTokens.delete(tokenHash);
 
+      return res.status(400).json({
+        success: false,
+        message: 'ไม่พบบัญชีผู้ใช้ กรุณาขอลิงก์ใหม่'
+      });
+    }
+
+    // ลบโทเคนหลังเปลี่ยนรหัสผ่านสำเร็จ
     resetTokens.delete(tokenHash);
 
     return res.json({
       success: true,
-      message: 'เปลี่ยน Password สำเร็จ'
+      message: 'เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่'
     });
-
   } catch (error) {
-    console.error(
-      'RESET PASSWORD ERROR:',
-      error
-    );
-
+    console.error('RESET PASSWORD ERROR:', error.message);
     next(error);
   }
 });
